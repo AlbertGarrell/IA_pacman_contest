@@ -21,7 +21,7 @@
 # For more info, see http://inst.eecs.berkeley.edu/~cs188/sp09/pacman.html
 
 import random
-import util
+import contest.util as util
 
 from contest.capture_agents import CaptureAgent
 from contest.game import Directions
@@ -104,7 +104,7 @@ class ReflexCaptureAgent(CaptureAgent):
         """
         successor = game_state.generate_successor(self.index, action)
         pos = successor.get_agent_state(self.index).get_position()
-        if pos != nearestPoint(pos):
+        if pos != nearest_point(pos):
             # Only half a grid position was covered
             return successor.generate_successor(self.index, action)
         else:
