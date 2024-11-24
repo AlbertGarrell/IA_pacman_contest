@@ -61,11 +61,17 @@ class ReflexCaptureAgent(CaptureAgent):
         super().__init__(index, time_for_computing)
         self.start = None
         self.position_history = []  # To track the last few positions
+        self.role_history = []  # Stores recent roles (e.g., ["offensive", "defensive"])
+
 
     def register_initial_state(self, game_state):
         self.start = game_state.get_agent_position(self.index)
         CaptureAgent.register_initial_state(self, game_state)
         self.position_history = []  # Reset position history
+        self.role_history = []  # Reset recent roles (e.g., ["offensive", "defensive"])
+    
+    def get_current_role(self):
+        return self.role_history[-1] if self.role_history else None
     
     def detect_loop(self):
         """
@@ -77,6 +83,50 @@ class ReflexCaptureAgent(CaptureAgent):
         # Check if the last three positions form a loop
         return (self.position_history[-1] == self.position_history[-3] and
                 self.position_history[-2] == self.position_history[-4])
+
+    def assign_role(self, my_dist, other_dist, closest_ghost, enough_score, invaders, we_win, time_left, mid_with):
+
+        """ # If losing, prioritize offensive roles for both agents
+        if not we_win or time_left > 1000:
+            proposed_role = "offensive"
+
+        else:
+            # Default role assignment conditions
+            if (my_dist >= other_dist and (closest_ghost - mid_with) >= 5 and not enough_score) or (len(invaders) < 1 and (closest_ghost - mid_with) >= 5):
+                proposed_role = "offensive"
+            else:
+                proposed_role = "defensive"
+
+        # Check for oscillation in the last 10 roles
+        if len(self.role_history) >= 10:
+            last_10_roles = self.role_history[-10:]
+            unique_roles = set(last_10_roles)
+            
+            # Detect oscillation pattern (e.g., alternating roles)
+            if len(unique_roles) == 2:  # Only "offensive" and "defensive"
+                offensive_count = last_10_roles.count("offensive")
+                defensive_count = last_10_roles.count("defensive")
+                
+                # If roles alternate frequently
+                if abs(offensive_count - defensive_count) <= 2:
+                    # Break oscillation by forcing the opposite role
+                    if proposed_role == "offensive":
+                        proposed_role = "defensive"
+                    else:
+                        proposed_role = "offensive"
+
+        # Update role history
+        self.role_history.append(proposed_role)
+        if len(self.role_history) > 20:  # Limit history length
+            self.role_history.pop(0) """
+        
+        if my_dist >= other_dist:
+            proposed_role = "offensive"
+        else:
+            proposed_role = "defensive"
+
+        return proposed_role
+
 
     def choose_action(self, game_state):
         """
@@ -95,8 +145,8 @@ class ReflexCaptureAgent(CaptureAgent):
             value = self.evaluate(game_state, action)
 
             # Penalize moves that perpetuate a detected loop
-            if self.detect_loop() and new_position == self.position_history[-2]:
-                value -= float('-inf')  # Heavy penalty for perpetuating a loop
+            #if self.detect_loop() and new_position == self.position_history[-2]:
+            #    value -= float('-inf')  # Heavy penalty for perpetuating a loop
 
             # Penalize STOP action, but less severely
             if action == Directions.STOP:
@@ -215,6 +265,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
                             heuristic_value = heuristic_value - 75 * (5 - nearest_ghost)
     
         return heuristic_value
+    
 
     # following our lab1 submission
     def aStarSearch(self, problem, game_state, heuristic = nullHeuristic):
@@ -289,14 +340,18 @@ class OffensiveDefensive(ReflexCaptureAgent):
     def choose_action(self, game_state):
 
         score = self.get_score(game_state)
+        time_left = game_state.data.timeleft
+        midWidth = game_state.data.layout.width / 2
 
         team_read_bool = game_state.is_on_red_team(self.index)
+
+        score = score if team_read_bool else -score
 
         # Adjust score based on team color
         adjusted_score = score if team_read_bool else -score
 
         # Determine win and score conditions
-        we_win = adjusted_score > 0
+        we_win = adjusted_score >= 0
         enough_score = adjusted_score > 4
 
         my_team = self.get_team(game_state)
@@ -308,6 +363,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
             state = game_state.get_agent_state(t)
 
             if t != self.index:
+                team_mate = t
                 other_pos = state.get_position()
         
         my_dist = abs(self.start[0] - my_pos[0])
@@ -316,7 +372,10 @@ class OffensiveDefensive(ReflexCaptureAgent):
         # Computes the distance to the closest ghost
 
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
-        invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
+        #invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
+        invaders = [a for a in enemies if a.is_pacman]
+
+        print("Num invaders:", len(invaders))
 
         ghosts = [a for a in enemies if not a.is_pacman]
 
@@ -331,8 +390,14 @@ class OffensiveDefensive(ReflexCaptureAgent):
                 - if the agent that is closest to the opponent's side is eaten, the one defending becomes the 
                   closest one and therefore turns into an offensive agent
         """
-        #if (my_dist >= other_dist and closest_ghost >= 5 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 5):
-        if (my_dist >= other_dist and closest_ghost >= 5 and not enough_score):
+
+        role = self.assign_role(my_dist, other_dist, closest_ghost, enough_score, invaders, we_win, time_left, midWidth)
+
+        print("\tRole: ", role)
+
+        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 7):
+        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score):
+        if role == 'offensive':
         
             ### OFFENSIVE ###
             actions = game_state.get_legal_actions(self.index)
@@ -347,11 +412,15 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
             if self.ghost_dist(game_state) is not None:
                 closest_ghost_dist = self.ghost_dist(game_state)[0] 
+                        
+            """ if teammate_distance < 3:
+                print("\tToo close to teammate, prioritizing spreading out.")
+                problem = SpreadOutProblem(game_state, self, self.index)  # Custom problem to move apart """
 
             if carrying == 0 and food_left == 0:
                 return 'Stop'
 
-            if len(self.get_capsules(game_state)) != 0 and self.get_maze_distance(my_pos, self.get_capsules(game_state)[0]) < 4:
+            if len(self.get_capsules(game_state)) != 0 and self.get_maze_distance(my_pos, self.get_capsules(game_state)[0]) < closest_ghost:
                 problem = SearchPowerCapsuleProblem(game_state, self, self.index)
             
             elif scared_timer > 10 and closest_ghost_dist is not None and closest_ghost_dist < 6:
@@ -373,6 +442,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         # You can profile your evaluation time by uncommenting these lines
         # start = time.time()
+
         values = [self.evaluate(game_state, a) for a in actions]
         # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
 
@@ -380,6 +450,31 @@ class OffensiveDefensive(ReflexCaptureAgent):
         best_actions = [a for a, v in zip(actions, values) if v == max_value]
 
         food_left = len(self.get_food(game_state).as_list())
+
+        # Calculate distance to teammate
+        teammate_distance = self.get_maze_distance(my_pos, other_pos)
+        print("Teammate distance: ", teammate_distance)
+
+        # Threshold for minimum distance to teammate
+        MIN_DISTANCE_TO_TEAMMATE = 4
+
+        # Spreading out logic
+        """ if teammate_distance < MIN_DISTANCE_TO_TEAMMATE and time_left < 1000 and teammate_distance > closest_ghost:
+            print(f"Defensive agents too close: distance={teammate_distance}. Spreading out.")
+
+            best_dist = 0  # Maximize distance to teammate
+            best_action = None
+            for action in actions:
+                successor = self.get_successor(game_state, action)
+                pos2 = successor.get_agent_position(self.index)
+                dist_to_teammate = self.get_maze_distance(pos2, other_pos)
+
+                if dist_to_teammate > best_dist:
+                    best_action = action
+                    best_dist = dist_to_teammate
+
+            if best_action:
+                return best_action """
 
         if food_left <= 2:
             best_dist = 9999
@@ -585,3 +680,28 @@ class SearchGhostProblem(PositionSearchProblem):
     def isGoalState(self, state):
          # the goal state is the location of the closestghost
         return state == self.ghost_dist.get_position()
+
+class SpreadOutProblem:
+    def __init__(self, game_state, agent, agent_index):
+        self.start = game_state.get_agent_position(agent_index)
+        self.agent = agent
+        self.agent_index = agent_index
+        self.teammate_pos = [game_state.get_agent_state(i).get_position()
+                             for i in agent.get_team(game_state) if i != agent_index][0]
+
+    def getStartState(self):
+        return self.start
+
+    def isGoalState(self, state):
+        distance_to_teammate = self.agent.get_maze_distance(state, self.teammate_pos)
+        return distance_to_teammate >= 3  # Goal: Be at least 3 units apart
+
+    def getSuccessors(self, state):
+        successors = []
+        for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
+            x, y = state
+            dx, dy = Actions.directionToVector(action)
+            next_state = (int(x + dx), int(y + dy))
+            if not self.agent.walls[next_state[0]][next_state[1]]:  # Check for walls
+                successors.append((next_state, action, 1))  # Cost of 1 for all moves
+        return successors
