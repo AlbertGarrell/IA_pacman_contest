@@ -375,7 +375,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         #invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         invaders = [a for a in enemies if a.is_pacman]
 
-        print("Num invaders:", len(invaders))
+        #############################################################################################################print("Num invaders:", len(invaders))
 
         ghosts = [a for a in enemies if not a.is_pacman]
 
@@ -393,7 +393,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         role = self.assign_role(my_dist, other_dist, closest_ghost, enough_score, invaders, we_win, time_left, midWidth)
 
-        print("\tRole: ", role)
+        #####################################################################################################################################print("\tRole: ", role)
 
         #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 7):
         #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score):
@@ -453,7 +453,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         # Calculate distance to teammate
         teammate_distance = self.get_maze_distance(my_pos, other_pos)
-        print("Teammate distance: ", teammate_distance)
+        ###############################################################################################################################print("Teammate distance: ", teammate_distance)
 
         # Threshold for minimum distance to teammate
         MIN_DISTANCE_TO_TEAMMATE = 4

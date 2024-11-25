@@ -261,7 +261,6 @@ class OffensiveDefensive(ReflexCaptureAgent):
         return heuristic_value
     
 
-    # following our lab1 submission
     def aStarSearch(self, problem, game_state, heuristic = nullHeuristic):
         """Search the node that has the lowest combined cost and heuristic first."""
         expanded = [] # list of states already visited
@@ -369,7 +368,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         #invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         invaders = [a for a in enemies if a.is_pacman]
 
-        print("Num invaders:", len(invaders))
+        #########################################################################################################################print("Num invaders:", len(invaders))
 
         ghosts = [a for a in enemies if not a.is_pacman]
 
@@ -387,7 +386,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         role = self.assign_role(my_dist, other_dist, closest_ghost_dist, enough_score, invaders, we_win, time_left, midWidth)
 
-        print("\tRole: ", role)
+        ############################################################################################################################print("\tRole: ", role)
 
         #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 7):
         #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score):
@@ -411,19 +410,19 @@ class OffensiveDefensive(ReflexCaptureAgent):
             scared_timer = game_state.get_agent_state(self.index).scared_timer
 
             if self.get_capsules(game_state):  # Check for power capsules first
-                print("Problem = Search Capsule")
+                #########################################################################################print("Problem = Search Capsule")
                 problem = SearchPowerCapsuleProblem(game_state, self, self.index)
 
             elif closest_food_dist < closest_ghost_dist:  # Prioritize food if it's safe
-                print("Problem = Search Food")
+                #########################################################################################print("Problem = Search Food")
                 problem = SearchProblem(game_state, self, self.index)
 
             elif carrying > 0:  # Return to base if carrying food
-                print("Problem = Risk Food - Returning to Base")
+                ###########################################################################################print("Problem = Risk Food - Returning to Base")
                 problem = ReturnBaseProblem(game_state, self, self.index)
 
             else:  # Default action
-                print("Problem = Default Action - Searching for Food")
+                #########################################################################################print("Problem = Default Action - Searching for Food")
                 problem = SearchProblem(game_state, self, self.index)
 
             return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
@@ -436,8 +435,8 @@ class OffensiveDefensive(ReflexCaptureAgent):
         # Check scared timer (Condition 1)
         scared_timer = my_state.scared_timer
         if scared_timer > 0:  # If scared, go for the opponent's food
-            print("Defensive agent is scared. Acting offensively.")
-            print(f"\tScared: {scared_timer}")
+            ################################################################################################################print("Defensive agent is scared. Acting offensively.")
+            ################################################################################################################print(f"\tScared: {scared_timer}")
             problem = SearchProblem(game_state, self, self.index)
             return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
 
@@ -445,7 +444,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         if len(invaders) > 0:  # If invaders are visible, chase the closest one
-            print("Invaders detected! Chasing the closest invader.")
+            ################################################################################################################print("Invaders detected! Chasing the closest invader.")
 
             try:
                 closest_invader_state = self.invasor_dist(game_state)[1]
@@ -455,7 +454,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
                     problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
                     return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
             except:
-                print("Failed to find a path to the invader. Moving to the center of the map.")
+                #############################################################################################################print("Failed to find a path to the invader. Moving to the center of the map.")
 
                 # Calculate the center of the map
                 walls = game_state.get_walls()
@@ -486,14 +485,14 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         disappeared_food = list(set(previous_food_defending) - set(food_defending))
         if disappeared_food:  # If food disappeared, move to that location
-            print("Defending disappearing food. Moving to last known location.")
+            ############################################################################################################print("Defending disappearing food. Moving to last known location.")
             problem = SearchDisappearedFoodProblem(game_state, self, self.index, disappeared_food)
             actions = self.aStarSearch(problem, game_state, self.our_heuristic)
             if actions:
                 return actions[0]
         
         # Default defensive behavior: Oscillate around the center of the map
-        print("No immediate threats detected. Patrolling the map center.")
+        ###############################################################################################################print("No immediate threats detected. Patrolling the map center.")
 
         actions = game_state.get_legal_actions(self.index)
 
