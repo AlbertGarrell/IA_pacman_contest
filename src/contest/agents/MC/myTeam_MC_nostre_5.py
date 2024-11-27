@@ -87,19 +87,16 @@ class ReflexCaptureAgent(CaptureAgent):
     def assign_role(self, my_dist, other_dist, closest_ghost, enough_score, invaders, we_win, time_left, mid_with):
 
         if enough_score:
-            proposed_role = "defensive"
+            return "defensive"
         
         if time_left < 400 and not we_win:
-            proposed_role = "offensive"
+            return "offensive"
         
-        if my_dist >= other_dist:
-            proposed_role = "offensive"
+        elif my_dist >= other_dist:
+            return "offensive"
 
         else:
-            proposed_role = "defensive"
-
-        return proposed_role
-
+            return "defensive"
 
     def choose_action(self, game_state):
         """
@@ -261,56 +258,35 @@ class OffensiveDefensive(ReflexCaptureAgent):
         return heuristic_value
     
 
-    def aStarSearch(problem, heuristic=nullHeuristic):
-        """
-        Search the node that has the lowest combined cost and heuristic first.
+    def aStarSearch(self, problem, game_state, heuristic = nullHeuristic):
+        """Search the node that has the lowest combined cost and heuristic first."""
+        expanded = [] # list of states already visited
+        aStarQueue = util.PriorityQueue() # using priority queue 
+        initialState = problem.getStartState()
 
-        This A* search algorithm uses a priority queue where nodes are prioritized by 
-        their cumulative path cost (g(n)) plus the heuristic estimate (h(n)) to the goal. 
-        This makes A* both optimal and efficient with a well-designed heuristic.
+        # priority queue with (state, path list, cost)
+        aStarQueue.push((initialState, [], 0), heuristic(initialState, game_state))
 
-        Args:
-            problem: An instance of the SearchProblem that defines the problem space.
-            heuristic: A function that estimates the cost from a given state to the goal.
-        
-        Returns:
-            A list of actions to reach the goal, or an empty list if no path is found.
-        """
-        # Priority function for A* that calculates the priority as g(n) + h(n)
-        def priority_function(item):
-            state, path, cost = item
-            return cost + heuristic(state, problem)  # Calculate f(n) = g(n) + h(n)
-        
-        # Initialize a priority queue with the custom priority function for A*
-        queue = util.PriorityQueueWithFunction(priority_function)
-        visited_nodes = set()  # Set to keep track of nodes that have been explored
-        
-        # Initialize the queue with the starting position, empty path, and zero cost
-        init_position = problem.get_start_state()
-        queue.push((init_position, [], 0))  # (state, path, cost)
+        while not aStarQueue.is_empty():
+            state, path, cost = aStarQueue.pop()
 
-        # Continue exploring nodes until the queue is empty or the goal is found
-        while not queue.is_empty():
-            state, path, cost = queue.pop()  # Get the node with the lowest f(n) = g(n) + h(n)
+            # if the state visited is the goal, return the list of moves
+            if problem.isGoalState(state):
+                return path 
 
-            # If the goal state is reached, return the path to the goal
-            if problem.is_goal_state(state):
-                return path
+            # visit all successors
+            if state not in expanded:
+                for s, d, c in problem.getSuccessors(state):
+                    new_path = path + [d]
+                    new_cost = cost + c
+                    h_value = heuristic(s, game_state)
+                    # Calculate the priority (cost + heuristic)
+                    priority = new_cost + h_value
+                    aStarQueue.push((s, new_path, new_cost), priority)
 
-            # Expand successors only if the current state hasn't been visited
-            if state not in visited_nodes:
-                visited_nodes.add(state)  # Mark the state as visited
+                # Update the visited states list
+                expanded.append(state)
 
-                # Explore each successor of the current state
-                for successor, action, step_cost in problem.get_successors(state):
-                    if successor not in visited_nodes:
-                        # Calculate the new path and g(n) cost for the successor
-                        new_path = path + [action]
-                        new_cost = cost + step_cost  # g(n) value for the successor
-                        # Push the successor onto the queue with updated f(n) priority
-                        queue.push((successor, new_path, new_cost))
-
-        # Return an empty list if no path to the goal was found
         return []
     
     ### DEFENSIVE ###
@@ -465,81 +441,71 @@ class OffensiveDefensive(ReflexCaptureAgent):
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         if len(invaders) > 0:  # If invaders are visible, chase the closest one
-            ################################################################################################################print("Invaders detected! Chasing the closest invader.")
-
+            print("Invaders detected! Chasing the closest invader.")
+            
             try:
                 closest_invader_state = self.invasor_dist(game_state)[1]
-                closest_invader_dist = self.invasor_dist(game_state)[0]
-
+                
+                # If the invasor is close enough to compute the manhattan distance
                 if closest_invader_state:
                     problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
                     return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
             except:
-                #############################################################################################################print("Failed to find a path to the invader. Moving to the center of the map.")
+                print("Failed to find a path to the invader. Looking for disappearing food.")
 
-                # Calculate the center of the map
-                walls = game_state.get_walls()
-                map_width = walls.width
-                map_height = walls.height
+                # Check for disappearing food (Condition 3)
+                food_defending = self.get_food_you_are_defending(game_state).as_list()
+                previous_food_defending = getattr(self, "previous_food_defending", food_defending)
+                self.previous_food_defending = food_defending
+
+                disappeared_food = list(set(previous_food_defending) - set(food_defending))
+                if disappeared_food:  # If food disappeared, move to that location
+                    print("Defending disappearing food. Moving to last known location.")
+                    problem = SearchDisappearedFoodProblem(game_state, self, self.index, disappeared_food)
+                    actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+                    if actions:
+                        return actions[0]
                 
-                current_position = self.get_position()
-
-                # Calculate the inverted coordinate
-                inverted_position = (current_position[0], map_height - current_position[1])
-
-                if abs(current_position[0] - map_width) < 5 or abs(current_position[0] - map_width) > (map_width - 5):
-                    # If the agent is near the edge, move to the center
-                    inverted_position[0] = map_width // 2
-
-                # Define a PositionSearchProblem to go to the center
-                problem = PositionSearchProblem(game_state, start=self.get_position(), goal=inverted_position, walls=walls)
-
-                # Try to move to the center
-                actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-                if actions:
-                    return actions[0]
-        
-        # Check for disappearing food (Condition 3)
-        food_defending = self.get_food_you_are_defending(game_state).as_list()
-        previous_food_defending = getattr(self, "previous_food_defending", food_defending)
-        self.previous_food_defending = food_defending
-
-        disappeared_food = list(set(previous_food_defending) - set(food_defending))
-        if disappeared_food:  # If food disappeared, move to that location
-            ############################################################################################################print("Defending disappearing food. Moving to last known location.")
-            problem = SearchDisappearedFoodProblem(game_state, self, self.index, disappeared_food)
-            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-            if actions:
-                return actions[0]
-        
         # Default defensive behavior: Oscillate around the center of the map
         ###############################################################################################################print("No immediate threats detected. Patrolling the map center.")
 
+        if time_left < 1000:
+
+            print("No immediate threats detected. Patrolling the map center.")
+            current_position = my_state.get_position()
+            map_width, map_height = game_state.data.layout.width, game_state.data.layout.height
+
+            # Calculate the center x-coordinate
+            center_x = map_width // 2
+            oscillate_y = current_position[1] + 1 if current_position[1] < map_height // 2 else current_position[1] - 1
+
+            # Define the patrol target
+            patrol_target = (center_x, oscillate_y)
+
+            # Ensure the patrol target is within bounds and not a wall
+            
+            problem = PatrolPosSearchProblem(game_state, self.index, patrol_location=patrol_target)
+            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+            if actions:
+                return actions[0]
+                
+        elif time_left > 1000:
+            print("Heading to the center.")
+            current_position = my_state.get_position()
+            map_width_mid, map_height_mid = game_state.data.layout.width // 2, game_state.data.layout.height // 2
+
+            target_pos = (map_width_mid, map_height_mid)
+
+            problem = PositionSearchProblem(game_state, self.index, goal=target_pos)
+            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+            print(f"Heading to the center with actions {len(actions)}.")
+            if actions:
+                return actions[0]
+
+        # Fallback: Random legal action if no path to patrol target
+        print("Unable to patrol center. Choosing random legal action.")
         actions = game_state.get_legal_actions(self.index)
-
-        # You can profile your evaluation time by uncommenting these lines
-        # start = time.time()
-        values = [self.evaluate(game_state, a) for a in actions]
-        # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
-
-        max_value = max(values)
-        best_actions = [a for a, v in zip(actions, values) if v == max_value]
-
-        food_left = len(self.get_food(game_state).as_list())
-
-        if food_left <= 2:
-            best_dist = 9999
-            best_action = None
-            for action in actions:
-                successor = self.get_successor(game_state, action)
-                pos2 = successor.get_agent_position(self.index)
-                dist = self.get_maze_distance(self.start, pos2)
-                if dist < best_dist:
-                    best_action = action
-                    best_dist = dist
-            return best_action
-
-        return random.choice(best_actions)
+        return random.choice(actions)
     
 # from PositionSearchProblem of lab1 (searchAgents.py)
 class PositionSearchProblem:
@@ -561,7 +527,7 @@ class PositionSearchProblem:
         costFn: A function from a search state (tuple) to a non-negative number
         goal: A position in the gameState
         """
-        self.walls = gameState.getWalls()
+        self.walls = gameState.data.layout.walls
         self.startState = gameState.getPacmanPosition()
         if start != None: self.startState = start
         self.goal = goal
@@ -635,6 +601,27 @@ class PositionSearchProblem:
             cost += self.costFn((x,y))
         return cost
 
+class PatrolPosSearchProblem(PositionSearchProblem):
+    """
+    A search problem for moving to the patrol location.
+    """
+
+    def __init__(self, gameState, agentIndex, patrol_location):
+        """
+        Initialize the problem.
+        """
+        self.walls = gameState.get_walls()
+        self.startState = gameState.get_agent_state(agentIndex).get_position()
+        self.costFn = lambda x: 1  # Uniform cost function
+        self.patrol_pos = patrol_location
+        self._visited, self._visitedlist, self._expanded = {}, [], 0  # DO NOT CHANGE
+
+    def isGoalState(self, state):
+        """
+        The goal state is reaching the location.
+        """
+        return state in self.patrol_pos
+    
 # from AnyFoodSearchProblem of lab1 (searchAgents.py)
 class SearchProblem(PositionSearchProblem):
 
