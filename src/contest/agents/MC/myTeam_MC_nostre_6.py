@@ -331,7 +331,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         weights = self.get_weights(game_state, action)
         return features * weights
     
-    ### CHOOSE ACTION DEPENDING ON AGENT ###
+        ### CHOOSE ACTION DEPENDING ON AGENT ###
     def choose_action(self, game_state):
 
         score = self.get_score(game_state)
@@ -365,9 +365,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         other_dist = abs(self.start[0] - other_pos[0])
 
         # Computes the distance to the closest ghost
-
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
-        #invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         invaders = [a for a in enemies if a.is_pacman]
 
         #########################################################################################################################print("Num invaders:", len(invaders))
@@ -383,15 +381,13 @@ class OffensiveDefensive(ReflexCaptureAgent):
                 - if both agents are in the same x position, they are both offensive agents
                 - if one of the agents is further back than the other, it becomes a defensive agent and stays back
                 - if the agent that is closest to the opponent's side is eaten, the one defending becomes the 
-                  closest one and therefore turns into an offensive agent
+                closest one and therefore turns into an offensive agent
         """
 
         role = self.assign_role(my_dist, other_dist, closest_ghost_dist, enough_score, invaders, we_win, time_left, midWidth)
 
         ############################################################################################################################print("\tRole: ", role)
 
-        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 7):
-        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score):
         if role == 'offensive':
         
             ### OFFENSIVE ###
@@ -420,31 +416,14 @@ class OffensiveDefensive(ReflexCaptureAgent):
                 problem = SearchProblem(game_state, self, self.index)
 
             elif carrying > 0:  # Return to base if carrying food
+                ###########################################################################################print("Problem = Risk Food - Returning to Base")
                 problem = ReturnBaseProblem(game_state, self, self.index)
-                
-                # Debugging: imprimir información del problema
-                #print(f"Returning to base. Start state: {problem.getStartState()}, Goal: {problem.boundaryPos}")
-                
-                # Llama a aStarSearch y maneja resultados vacíos
-                actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-                if not actions:  # Si no se encontró un camino
-                    #print("No valid actions found with A* search, choosing random action.")
-                    actions = game_state.get_legal_actions(self.index)
-                    return random.choice(actions)  # Acción aleatoria como fallback
-                return actions[0]
-
 
             else:  # Default action
                 #########################################################################################print("Problem = Default Action - Searching for Food")
                 problem = SearchProblem(game_state, self, self.index)
 
-            # Llama a aStarSearch y maneja resultados vacíos
-            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-            if not actions:  # Si no se encontró un camino
-                #print("No valid actions found with A* search, choosing random action.")
-                actions = game_state.get_legal_actions(self.index)
-                return random.choice(actions)  # Acción aleatoria como fallback
-            return actions[0]
+            return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
 
         ### DEFENSIVE ###
         actions = game_state.get_legal_actions(self.index)
@@ -454,7 +433,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         # Check scared timer (Condition 1)
         scared_timer = my_state.scared_timer
         if scared_timer > 0:  # If scared, go for the opponent's food
-            #print("Defensive agent is scared. Acting offensively.")
+            print("Defensive agent is scared. Acting offensively.")
             ################################################################################################################print(f"\tScared: {scared_timer}")
             problem = SearchProblem(game_state, self, self.index)
             return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
@@ -462,20 +441,29 @@ class OffensiveDefensive(ReflexCaptureAgent):
         # Check for invaders (Condition 2)
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
-        if len(invaders) > 0 and len(ghosts) == 2:  # If invaders are visible, chase the closest one
-            #print("Invaders detected! Chasing the closest invader.")
 
+        if len(invaders) > 0 and len(ghosts) == 2:  # If invaders are visible
             closest_invader_state = self.invasor_dist(game_state)[1]
             closest_invader_dist = self.invasor_dist(game_state)[0]
-            
-            if closest_invader_dist != None:
 
-                #print("Invaders detected! Chasing the closest invader.")
-
+            if closest_invader_dist is not None:
+                print("Invaders detected! Strategically positioning to intercept.")
                 if closest_invader_state:
-                    problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
+                    invader_pos = closest_invader_state.get_position()
+                    map_center = (game_state.data.layout.width / 2, game_state.data.layout.height / 2)
+                    
+                    # Calculate interception point closer to the center
+                    weight = 0.6  # Adjust weight to control closeness to the center
+                    intercept_point = (
+                        weight * map_center[0] + (1 - weight) * invader_pos[0],
+                        weight * map_center[1] + (1 - weight) * invader_pos[1],
+                    )
+                    
+                    # Use the new SearchInterceptionProblem to navigate to the interception point
+                    problem = SearchInterceptionProblem(game_state, self, self.index, intercept_point)
                     return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
-            
+
+
         # Check for disappearing food using the previous observation
         previous_game_state = self.get_previous_observation()
 
@@ -490,52 +478,36 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
             # Find disappeared food
             disappeared_food = list(set(previous_food) - set(current_food))
-            #print(f"Disappeared food detected: {disappeared_food}")
+            print(f"Disappeared food detected: {disappeared_food}")
 
             # Update the last disappeared food location if new food disappeared
             if disappeared_food:
                 self.last_disappeared_food = disappeared_food
 
-        # If there's a known disappeared food location, move toward it
         if self.last_disappeared_food:
-            #print(f"Continuing to defend last disappeared food location: {self.last_disappeared_food}")
-            problem = SearchDisappearedFoodProblem(game_state, self, self.index, self.last_disappeared_food)
+            print(f"Strategically moving to defend disappeared food location: {self.last_disappeared_food}")
+            
+            # Calculate target position near the center zone
+            disappeared_food_pos = self.last_disappeared_food[0]
+            map_center_x = game_state.data.layout.width / 2
+            target_position = (map_center_x, disappeared_food_pos[1])
+
+            # Create a custom problem to navigate to the target position
+            problem = SearchDisappearedFoodProblem(game_state, self, self.index, [target_position])
             actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+
             if actions:
-                # Return the next action and clear the target if reached
                 next_action = actions[0]
                 next_position = game_state.generate_successor(self.index, next_action).get_agent_position(self.index)
-
-                # Clear the target if the agent reaches the food's location
-                if next_position in self.last_disappeared_food:
-                    self.last_disappeared_food.remove(next_position)
+                
+                # Clear the target if the agent reaches the location
+                if next_position == target_position:
+                    self.last_disappeared_food.remove(disappeared_food_pos)
 
                 return next_action
-            
-        """ # Calculate the center of the map
-        walls = game_state.get_walls()
-        map_width = walls.width
-        map_height = walls.height
-        
-        current_position = self.get_position()
 
-        # Calculate the inverted coordinate
-        inverted_position = (current_position[0], map_height - current_position[1])
-
-        if abs(current_position[0] - map_width) < 5 or abs(current_position[0] - map_width) > (map_width - 5):
-            # If the agent is near the edge, move to the center
-            inverted_position[0] = map_width // 2
-
-        # Define a PositionSearchProblem to go to the center
-        problem = PositionSearchProblem(game_state, start=self.get_position(), goal=inverted_position, walls=walls)
-
-        # Try to move to the center
-        actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-        if actions:
-            return actions[0] """
-        
         # Default defensive behavior: Oscillate around the center of the map
-        #print("No immediate threats detected.")
+        print("No immediate threats detected.")
 
         actions = game_state.get_legal_actions(self.index)
 
@@ -562,6 +534,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
             return best_action
 
         return random.choice(best_actions)
+
     
 # from PositionSearchProblem of lab1 (searchAgents.py)
 class PositionSearchProblem:
@@ -875,3 +848,39 @@ class SpreadOutProblem:
             if not self.agent.walls[next_state[0]][next_state[1]]:  # Check for walls
                 successors.append((next_state, action, 1))  # Cost of 1 for all moves
         return successors
+
+class SearchInterceptionProblem(PositionSearchProblem):
+    """
+    When we want to intercept an invader by positioning between the invader and the center of the field.
+    """
+
+    def __init__(self, gameState, agent, agentIndex=0, interceptionPoint=None):
+        """
+        Initializes the problem to calculate an interception point.
+        :param gameState: Current game state
+        :param agent: The agent attempting to intercept
+        :param agentIndex: Index of the agent in the game
+        :param interceptionPoint: The strategic point to intercept (optional)
+        """
+        # Store walls for the PositionSearchProblem setup
+        self.walls = gameState.get_walls()
+        self.startState = gameState.get_agent_state(agentIndex).get_position()
+        self.costFn = lambda x: 1
+        self._visited, self._visitedlist, self._expanded = {}, [], 0  # DO NOT CHANGE
+        self.agent = agent
+        self.agentIndex = agentIndex
+
+        # Use provided interception point as the goal
+        if interceptionPoint:
+            self.goal = interceptionPoint
+        else:
+            # Default to the center of the field if no interception point is provided
+            map_center = (gameState.data.layout.width / 2, gameState.data.layout.height / 2)
+            self.goal = map_center
+
+    def isGoalState(self, state):
+        """
+        Determines whether the given state is the goal state (i.e., the interception point).
+        """
+        return state == self.goal
+

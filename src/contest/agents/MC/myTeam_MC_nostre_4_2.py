@@ -420,15 +420,34 @@ class OffensiveDefensive(ReflexCaptureAgent):
                 problem = SearchProblem(game_state, self, self.index)
 
             elif carrying > 0:  # Return to base if carrying food
-                problem = ReturnBaseProblem(game_state, self, self.index)
-                
-                # Debugging: imprimir información del problema
-                #print(f"Returning to base. Start state: {problem.getStartState()}, Goal: {problem.boundaryPos}")
-                
+                max_food_carry = 5  # Máxima comida permitida si estamos ganando
+                safety_margin = 25  # Margen de seguridad para regresar a tiempo
+
+                # Calcula la distancia más corta al punto más cercano de la frontera
+                closest_boundary_dist = min(
+                    [self.get_maze_distance(my_pos, boundary) for boundary in self.boundary(game_state)]
+                )
+
+                # Determinar si hay comida adyacente
+                nearby_food = any(
+                    self.get_maze_distance(my_pos, food) == 1
+                    for food in self.get_food(game_state).as_list()
+                )
+
+                # Condición para regresar
+                if time_left < closest_boundary_dist + safety_margin:
+                    print(f"Time Constraint: Returning to base. Time left: {time_left}, Dist to base: {closest_boundary_dist}")
+                    problem = ReturnBaseProblem(game_state, self, self.index)
+                elif we_win and carrying >= max_food_carry and not nearby_food:
+                    print(f"Winning and carrying {carrying} food. Returning to base.")
+                    problem = ReturnBaseProblem(game_state, self, self.index)
+                else:
+                    problem = SearchProblem(game_state, self, self.index)
+
                 # Llama a aStarSearch y maneja resultados vacíos
                 actions = self.aStarSearch(problem, game_state, self.our_heuristic)
                 if not actions:  # Si no se encontró un camino
-                    #print("No valid actions found with A* search, choosing random action.")
+                    print("No valid actions found with A* search, choosing random action.")
                     actions = game_state.get_legal_actions(self.index)
                     return random.choice(actions)  # Acción aleatoria como fallback
                 return actions[0]
@@ -438,13 +457,13 @@ class OffensiveDefensive(ReflexCaptureAgent):
                 #########################################################################################print("Problem = Default Action - Searching for Food")
                 problem = SearchProblem(game_state, self, self.index)
 
-            # Llama a aStarSearch y maneja resultados vacíos
             actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-            if not actions:  # Si no se encontró un camino
-                #print("No valid actions found with A* search, choosing random action.")
+            if not actions:  # Si no se encuentra un camino válido
+                print(f"No actions found with A* for problem: {type(problem).__name__}")
                 actions = game_state.get_legal_actions(self.index)
                 return random.choice(actions)  # Acción aleatoria como fallback
             return actions[0]
+
 
         ### DEFENSIVE ###
         actions = game_state.get_legal_actions(self.index)
@@ -454,7 +473,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
         # Check scared timer (Condition 1)
         scared_timer = my_state.scared_timer
         if scared_timer > 0:  # If scared, go for the opponent's food
-            #print("Defensive agent is scared. Acting offensively.")
+            print("Defensive agent is scared. Acting offensively.")
             ################################################################################################################print(f"\tScared: {scared_timer}")
             problem = SearchProblem(game_state, self, self.index)
             return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
@@ -470,7 +489,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
             
             if closest_invader_dist != None:
 
-                #print("Invaders detected! Chasing the closest invader.")
+                print("Invaders detected! Chasing the closest invader.")
 
                 if closest_invader_state:
                     problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
@@ -490,7 +509,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
             # Find disappeared food
             disappeared_food = list(set(previous_food) - set(current_food))
-            #print(f"Disappeared food detected: {disappeared_food}")
+            print(f"Disappeared food detected: {disappeared_food}")
 
             # Update the last disappeared food location if new food disappeared
             if disappeared_food:
@@ -498,7 +517,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
 
         # If there's a known disappeared food location, move toward it
         if self.last_disappeared_food:
-            #print(f"Continuing to defend last disappeared food location: {self.last_disappeared_food}")
+            print(f"Continuing to defend last disappeared food location: {self.last_disappeared_food}")
             problem = SearchDisappearedFoodProblem(game_state, self, self.index, self.last_disappeared_food)
             actions = self.aStarSearch(problem, game_state, self.our_heuristic)
             if actions:
@@ -535,7 +554,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
             return actions[0] """
         
         # Default defensive behavior: Oscillate around the center of the map
-        #print("No immediate threats detected.")
+        print("No immediate threats detected.")
 
         actions = game_state.get_legal_actions(self.index)
 
