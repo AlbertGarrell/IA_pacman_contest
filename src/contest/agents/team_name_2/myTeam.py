@@ -1,4 +1,4 @@
-# baselineTeam.py
+# myTeam.py
 # ---------------
 # Licensing Information:  You are free to use or extend these projects for
 # educational purposes provided that (1) you do not distribute or publish
@@ -12,13 +12,19 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-# baselineTeam.py
+# myTeam.py
 # ---------------
 # Licensing Information: Please do not distribute or publish solutions to this
 # project. You are free to use and extend these projects for educational
 # purposes. The Pacman AI projects were developed at UC Berkeley, primarily by
 # John DeNero (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
 # For more info, see http://inst.eecs.berkeley.edu/~cs188/sp09/pacman.html
+
+# ############
+# Authors:
+# Albert Garrell Golobardes
+# Arol Garcia Rodríguez
+# ############
 
 import random
 import util
@@ -28,6 +34,17 @@ from contest.game import Directions
 from contest.util import nearest_point
 from contest.game import Actions
 from contest.capture import GameState
+
+max_num_food = 20
+
+#################
+# Shared Assignments #
+#################
+
+# This dictionary will store which agent is chasing which enemy.
+# Tracking which agent is chasing which invader
+chase_status = {}
+
 
 #################
 # Team creation #
@@ -72,6 +89,7 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def get_current_role(self):
         return self.role_history[-1] if self.role_history else None
+
     
     def detect_loop(self):
         """
@@ -84,7 +102,13 @@ class ReflexCaptureAgent(CaptureAgent):
         return (self.position_history[-1] == self.position_history[-3] and
                 self.position_history[-2] == self.position_history[-4])
 
-    def assign_role(self, my_dist, other_dist, closest_ghost, enough_score, invaders, we_win, time_left, mid_with):
+    def assign_role(self, my_dist, other_dist, adjusted_score, enough_score, invaders, we_win, time_left, mid_with):
+
+        if time_left > 1050:
+            return "offensive"
+        
+        if adjusted_score < -7:
+            return "offensive"
 
         if enough_score:
             return "defensive"
@@ -92,9 +116,8 @@ class ReflexCaptureAgent(CaptureAgent):
         if time_left < 400 and not we_win:
             return "offensive"
         
-        elif my_dist >= other_dist:
+        if my_dist >= other_dist:
             return "offensive"
-
         else:
             return "defensive"
 
@@ -114,10 +137,6 @@ class ReflexCaptureAgent(CaptureAgent):
             # Evaluate the action
             value = self.evaluate(game_state, action)
 
-            # Penalize moves that perpetuate a detected loop
-            #if self.detect_loop() and new_position == self.position_history[-2]:
-            #    value -= float('-inf')  # Heavy penalty for perpetuating a loop
-
             # Penalize STOP action, but less severely
             if action == Directions.STOP:
                 value -= 100
@@ -136,6 +155,8 @@ class ReflexCaptureAgent(CaptureAgent):
             self.position_history.pop(0)
 
         return best_action
+
+
 
     def get_successor(self, game_state, action):
         """
@@ -211,18 +232,12 @@ class ReflexCaptureAgent(CaptureAgent):
             
             return [dist, invader_state]
         
-        return None
+        return [None, None]
 
 class OffensiveDefensive(ReflexCaptureAgent):
     """
-    Our strategy is to have one agent defending and one attacking, but alternating them so 
-    that the one that is closest to the opponent's side of the grid is the attacker. This way, 
-    if our offensive agent is eaten, the deffensive one automatically becommes an attacker, and 
-    the new agent that comes out of our start point is a defensive agent. With this, we avoid losing 
-    the time that it takes for the new ghost to get to the opponent's side and since the new one 
-    starts in our side, it can just start defending it.
-    This switch is computed when we choose the best action.
-    We have modified the offensive agent with an A* strategy following the concepts in lab1.
+    A specialized agent that switches between offensive and defensive roles dynamically.
+    The switching strategy prioritizes efficient transitions when one agent is removed (e.g., eaten).
     """
     ### OFFENSIVE ###
     def nullHeuristic(state, problem = None):
@@ -341,8 +356,8 @@ class OffensiveDefensive(ReflexCaptureAgent):
         adjusted_score = score if team_read_bool else -score
 
         # Determine win and score conditions
-        we_win = adjusted_score >= 0
-        enough_score = adjusted_score > 6
+        we_win = adjusted_score > 0
+        enough_score = adjusted_score > 5
 
         my_team = self.get_team(game_state)
         my_state = game_state.get_agent_state(self.index)
@@ -365,31 +380,19 @@ class OffensiveDefensive(ReflexCaptureAgent):
         #invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
         invaders = [a for a in enemies if a.is_pacman]
 
-        #########################################################################################################################print("Num invaders:", len(invaders))
+        #print("Num invaders:", len(invaders))
 
-        ghosts = [a for a in enemies if not a.is_pacman]
 
         try:
             closest_ghost_dist = self.ghost_dist(game_state)[0]
         except:
             closest_ghost_dist = 5
 
-        """ We compute the position of both our agents in the x axis, and then we compare them:
-                - if both agents are in the same x position, they are both offensive agents
-                - if one of the agents is further back than the other, it becomes a defensive agent and stays back
-                - if the agent that is closest to the opponent's side is eaten, the one defending becomes the 
-                  closest one and therefore turns into an offensive agent
-        """
 
-        role = self.assign_role(my_dist, other_dist, closest_ghost_dist, enough_score, invaders, we_win, time_left, midWidth)
+        role = self.assign_role(my_dist, other_dist, adjusted_score, enough_score, invaders, we_win, time_left, midWidth)
 
-        ############################################################################################################################print("\tRole: ", role)
-
-        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score) or (len(invaders) < 1 and closest_ghost >= 7):
-        #if (my_dist >= other_dist and closest_ghost >= 7 and not enough_score):
-        if role == 'offensive':
-        
-            ### OFFENSIVE ###
+        ### OFFENSIVE ###
+        if role == 'offensive':  
             actions = game_state.get_legal_actions(self.index)
             my_state = game_state.get_agent_state(self.index)
             my_pos = my_state.get_position()
@@ -406,106 +409,171 @@ class OffensiveDefensive(ReflexCaptureAgent):
             carrying = self.get_current_observation().get_agent_state(self.index).num_carrying
             scared_timer = game_state.get_agent_state(self.index).scared_timer
 
-            if self.get_capsules(game_state):  # Check for power capsules first
-                #########################################################################################print("Problem = Search Capsule")
-                problem = SearchPowerCapsuleProblem(game_state, self, self.index)
-
-            elif closest_food_dist < closest_ghost_dist:  # Prioritize food if it's safe
-                #########################################################################################print("Problem = Search Food")
-                problem = SearchProblem(game_state, self, self.index)
-
-            elif carrying > 0:  # Return to base if carrying food
-                ###########################################################################################print("Problem = Risk Food - Returning to Base")
+            if carrying >= 8:
+                # print(f"{carrying} food collected. Returning to base.")
                 problem = ReturnBaseProblem(game_state, self, self.index)
 
+            elif self.get_capsules(game_state):  # Check for power capsules first
+                # print("Problem = Search Capsule")
+                problem = SearchPowerCapsuleProblem(game_state, self, self.index)
+
+            elif carrying > 0:  # Return to base if carrying food
+                max_food_carry = 2  # Máxima comida permitida si estamos ganando
+                safety_margin = 8  # Margen de seguridad para regresar a tiempo
+
+                # Calcula la distancia más corta al punto más cercano de la frontera
+                closest_boundary_dist = min(
+                    [self.get_maze_distance(my_pos, boundary) for boundary in self.boundary(game_state)]
+                )
+                
+                # Condición para regresar
+                if time_left < closest_boundary_dist*5 + safety_margin:
+                    # print(f"Time Constraint: Returning to base. Time left: {time_left}, Dist to base: {closest_boundary_dist}")
+                    problem = ReturnBaseProblem(game_state, self, self.index)
+                #elif we_win and carrying >= max_food_carry and not nearby_food:
+                elif (closest_ghost_dist <= 3 and not scared_timer):
+                    # print(f"Too close to ghost. Returning Home")
+                    problem = ReturnBaseProblem(game_state, self, self.index)
+                elif (closest_food_dist < closest_ghost_dist + 4) and (closest_ghost_dist>3):  # Prioritize food if it's safe
+                    ########################################################################################## print("Problem = Search Food")
+                    # print(f"Secure to search food.")
+                    problem = SearchProblem(game_state, self, self.index)
+                elif we_win and carrying >= max_food_carry:
+                    # print(f"Winning and carrying {carrying} food. Returning to base.")
+                    problem = ReturnBaseProblem(game_state, self, self.index)
+                else:
+                    problem = SearchProblem(game_state, self, self.index)
+
+                # Llama a aStarSearch y maneja resultados vacíos
+                actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+                if not actions:  # Si no se encontró un camino
+                    # print("No valid actions found with A* search, choosing random action.")
+                    actions = game_state.get_legal_actions(self.index)
+                    return random.choice(actions)  # Acción aleatoria como fallback
+                return actions[0]
+
             else:  # Default action
-                #########################################################################################print("Problem = Default Action - Searching for Food")
+                ########################################################################################## print("Problem = Default Action - Searching for Food")
                 problem = SearchProblem(game_state, self, self.index)
 
-            return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
+            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+            if not actions:  # Si no se encuentra un camino válido
+                # print(f"No actions found with A* for problem: {type(problem).__name__}")
+                actions = game_state.get_legal_actions(self.index)
+                return random.choice(actions)  # Acción aleatoria como fallback
+            return actions[0]
 
         ### DEFENSIVE ###
-        actions = game_state.get_legal_actions(self.index)
-        my_state = game_state.get_agent_state(self.index)
-        my_pos = my_state.get_position()
+        if role == 'defensive':
+            # 0. In case we were attacking with food and now we are defensive
+            carrying = self.get_current_observation().get_agent_state(self.index).num_carrying
+            if carrying > 0:  # Return to base if carrying food
+                # print(f"Returning to base with {carrying} food.")
+                problem = ReturnBaseProblem(game_state, self, self.index)
+            # 1. Check scared timer
+            scared_timer = my_state.scared_timer
+            if scared_timer > 0 and time_left > 500:  # If scared, go for the opponent's food
+                # print(f"Agent {self.index}: Scared timer active, switching to offensive.")
+                problem = SearchProblem(game_state, self, self.index)
+                return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
 
-        # Check scared timer (Condition 1)
-        scared_timer = my_state.scared_timer
-        if scared_timer > 0:  # If scared, go for the opponent's food
-            ################################################################################################################print("Defensive agent is scared. Acting offensively.")
-            ################################################################################################################print(f"\tScared: {scared_timer}")
-            problem = SearchProblem(game_state, self, self.index)
-            return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
+            # 2. Check for the closest invader
+            closest_invader_state = self.invasor_dist(game_state)[1]
+            closest_invader_dist = self.invasor_dist(game_state)[0]
 
-        # Check for invaders (Condition 2)
-        enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
-        invaders = [a for a in enemies if a.is_pacman and a.get_position() is not None]
-        if len(invaders) > 0:  # If invaders are visible, chase the closest one
-            print("Invaders detected! Chasing the closest invader.")
-            
-            try:
-                closest_invader_state = self.invasor_dist(game_state)[1]
-                
-                # If the invasor is close enough to compute the manhattan distance
-                if closest_invader_state:
-                    problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
-                    return self.aStarSearch(problem, game_state, self.our_heuristic)[0]
-            except:
-                print("Failed to find a path to the invader. Looking for disappearing food.")
+            if closest_invader_dist is not None:
+                # Find the invader's index
+                for opponent_index in self.get_opponents(game_state):
+                    opponent_state = game_state.get_agent_state(opponent_index)
+                    if opponent_state == closest_invader_state:  # Match AgentState
+                        invader_id = opponent_index
+                        break
+                else:
+                    # print(f"Agent {self.index}: No matching opponent found for closest invader.")
+                    invader_id = None
 
-                # Check for disappearing food (Condition 3)
-                food_defending = self.get_food_you_are_defending(game_state).as_list()
-                previous_food_defending = getattr(self, "previous_food_defending", food_defending)
-                self.previous_food_defending = food_defending
+                if invader_id is not None:
+                    # Check if another agent is already chasing this invader
+                    if invader_id in chase_status:
+                        if chase_status[invader_id] != self.index and chase_status[invader_id] != 0:
+                            # Another agent is already chasing
+                            # print(f"Agent {self.index}: Another agent is chasing invader {invader_id}.")
+                            pass
+                            
+                        else:
+                            # Continue chasing if already assigned
+                            # print(f"Agent {self.index}: Continuing to chase invader {invader_id}.")
+                            problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
+                            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+                            if actions:
+                                return actions[0]
+                    else:
+                        # Assign this agent to chase the invader
+                        chase_status[invader_id] = self.index
+                        # print(f"Agent {self.index} is now chasing invader {invader_id}.")
+                        problem = SearchInvaderProblem(game_state, self, self.index, closest_invader_state)
+                        actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+                        if actions:
+                            return actions[0]
 
-                disappeared_food = list(set(previous_food_defending) - set(food_defending))
-                if disappeared_food:  # If food disappeared, move to that location
-                    print("Defending disappearing food. Moving to last known location.")
-                    problem = SearchDisappearedFoodProblem(game_state, self, self.index, disappeared_food)
-                    actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-                    if actions:
-                        return actions[0]
-                
-        # Default defensive behavior: Oscillate around the center of the map
-        ###############################################################################################################print("No immediate threats detected. Patrolling the map center.")
+            # 3. Clear chase status if no invaders remain or agent stops chasing
+            for invader_id in list(chase_status.keys()):
+                if chase_status[invader_id] == self.index:  # Only clear entries for this agent
+                    invader_state = game_state.get_agent_state(invader_id)
+                    if not invader_state.is_pacman or invader_state.get_position() is None:
+                        del chase_status[invader_id]
+                        # print(f"Agent {self.index}: Stopped chasing invader {invader_id} (no longer visible).")
 
-        if time_left < 1000:
+            # 4. Check for disappearing food
+            previous_game_state = self.get_previous_observation()
 
-            print("No immediate threats detected. Patrolling the map center.")
-            current_position = my_state.get_position()
-            map_width, map_height = game_state.data.layout.width, game_state.data.layout.height
+            if not hasattr(self, "last_disappeared_food"):
+                self.last_disappeared_food = []
 
-            # Calculate the center x-coordinate
-            center_x = map_width // 2
-            oscillate_y = current_position[1] + 1 if current_position[1] < map_height // 2 else current_position[1] - 1
+            if previous_game_state:
+                current_food = self.get_food_you_are_defending(game_state).as_list()
+                previous_food = self.get_food_you_are_defending(previous_game_state).as_list()
+                disappeared_food = list(set(previous_food) - set(current_food))
 
-            # Define the patrol target
-            patrol_target = (center_x, oscillate_y)
+                if disappeared_food:
+                    self.last_disappeared_food = disappeared_food
 
-            # Ensure the patrol target is within bounds and not a wall
-            
-            problem = PatrolPosSearchProblem(game_state, self.index, patrol_location=patrol_target)
-            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-            if actions:
-                return actions[0]
-                
-        elif time_left > 1000:
-            print("Heading to the center.")
-            current_position = my_state.get_position()
-            map_width_mid, map_height_mid = game_state.data.layout.width // 2, game_state.data.layout.height // 2
+            if self.last_disappeared_food:
+                problem = SearchDisappearedFoodProblem(game_state, self, self.index, self.last_disappeared_food)
+                actions = self.aStarSearch(problem, game_state, self.our_heuristic)
+                if actions:
+                    next_action = actions[0]
+                    next_position = game_state.generate_successor(self.index, next_action).get_agent_position(self.index)
 
-            target_pos = (map_width_mid, map_height_mid)
+                    if next_position in self.last_disappeared_food:
+                        self.last_disappeared_food.remove(next_position)
 
-            problem = PositionSearchProblem(game_state, self.index, goal=target_pos)
-            actions = self.aStarSearch(problem, game_state, self.our_heuristic)
-            print(f"Heading to the center with actions {len(actions)}.")
-            if actions:
-                return actions[0]
+                    return next_action
 
-        # Fallback: Random legal action if no path to patrol target
-        print("Unable to patrol center. Choosing random legal action.")
-        actions = game_state.get_legal_actions(self.index)
-        return random.choice(actions)
+            # 5. Default defensive behavior
+            actions = game_state.get_legal_actions(self.index)
+            values = [self.evaluate(game_state, a) for a in actions]
+            max_value = max(values)
+            best_actions = [a for a, v in zip(actions, values) if v == max_value]
+
+            food_left = len(self.get_food(game_state).as_list())
+
+            if food_left <= 2:
+                best_dist = 9999
+                best_action = None
+                for action in actions:
+                    successor = self.get_successor(game_state, action)
+                    pos2 = successor.get_agent_position(self.index)
+                    dist = self.get_maze_distance(self.start, pos2)
+                    if dist < best_dist:
+                        best_action = action
+                        best_dist = dist
+                return best_action
+
+            return random.choice(best_actions)
+
+
+
     
 # from PositionSearchProblem of lab1 (searchAgents.py)
 class PositionSearchProblem:
@@ -527,7 +595,7 @@ class PositionSearchProblem:
         costFn: A function from a search state (tuple) to a non-negative number
         goal: A position in the gameState
         """
-        self.walls = gameState.data.layout.walls
+        self.walls = gameState.getWalls()
         self.startState = gameState.getPacmanPosition()
         if start != None: self.startState = start
         self.goal = goal
@@ -601,27 +669,6 @@ class PositionSearchProblem:
             cost += self.costFn((x,y))
         return cost
 
-class PatrolPosSearchProblem(PositionSearchProblem):
-    """
-    A search problem for moving to the patrol location.
-    """
-
-    def __init__(self, gameState, agentIndex, patrol_location):
-        """
-        Initialize the problem.
-        """
-        self.walls = gameState.get_walls()
-        self.startState = gameState.get_agent_state(agentIndex).get_position()
-        self.costFn = lambda x: 1  # Uniform cost function
-        self.patrol_pos = patrol_location
-        self._visited, self._visitedlist, self._expanded = {}, [], 0  # DO NOT CHANGE
-
-    def isGoalState(self, state):
-        """
-        The goal state is reaching the location.
-        """
-        return state in self.patrol_pos
-    
 # from AnyFoodSearchProblem of lab1 (searchAgents.py)
 class SearchProblem(PositionSearchProblem):
 

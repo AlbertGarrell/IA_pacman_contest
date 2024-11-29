@@ -1,19 +1,14 @@
 # Team Information
 
-**Course:** _[fill your course code and name]_
+**Course:** Artificial Intelligence
 
-**Semester:** Semester _[1|2]_, _[year]_
+**Semester:** Semester 1, 4th year
 
-**Instructor:** _[name of your instructor]_
+**Instructor:** Sergio Calo
 
-**Team name:** _[replace this with team name in plan text]_
+**Team name:** Pila Doble AA
 
 **Team members:**
 
-* Student 1's Student number - Full Name - Student email - Student Github id
-* Student 2's Student number - Full Name - Student email - Student Github id
-* Student 3's Student number - Full Name - Student email - Student Github id
-
-Replace the lines above with the correct details of members. Delete or add lines as needed.
-
-Student numbers should just be the **numbers**.
+* Albert Garrell Golobardes - albert.garrell01@estudiant.upf.edu - AlbertGarrell
+* Arol Garcia Rodríguez - arol.garcia01@estudiant.upf.edu - arolgarrod
