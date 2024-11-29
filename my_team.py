@@ -431,7 +431,7 @@ class OffensiveDefensive(ReflexCaptureAgent):
                     # print(f"Time Constraint: Returning to base. Time left: {time_left}, Dist to base: {closest_boundary_dist}")
                     problem = ReturnBaseProblem(game_state, self, self.index)
                 #elif we_win and carrying >= max_food_carry and not nearby_food:
-                elif (closest_ghost_dist <= 3 and not scared_timer):
+                elif (closest_ghost_dist <= 3):
                     # print(f"Too close to ghost. Returning Home")
                     problem = ReturnBaseProblem(game_state, self, self.index)
                 elif (closest_food_dist < closest_ghost_dist + 4) and (closest_ghost_dist>3):  # Prioritize food if it's safe
